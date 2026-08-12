@@ -536,6 +536,15 @@
             'Ruby': '#701516', 'PHP': '#4F5D95', 'Dart': '#00B4AB',
         };
 
+        const FALLBACK_REPOS = [
+            { name: 'zgff667.github.io', html_url: 'https://github.com/zgff667/zgff667.github.io', description: '个人主页 - Modern glassmorphism design', language: 'HTML', stargazers_count: 0, forks_count: 0, fork: false },
+            { name: 'WalleLibrary', html_url: 'https://github.com/zgff667/WalleLibrary', description: 'Walle多渠道打包工具库', language: 'Java', stargazers_count: 0, forks_count: 0, fork: true },
+            { name: 'frida-gadget-patcher', html_url: 'https://github.com/zgff667/frida-gadget-patcher', description: 'Frida Gadget自动注入工具', language: 'Python', stargazers_count: 0, forks_count: 0, fork: true },
+            { name: 'Patcherbot', html_url: 'https://github.com/zgff667/Patcherbot', description: 'Android APK自动化补丁工具', language: 'Python', stargazers_count: 0, forks_count: 0, fork: true },
+            { name: 'lasting-yang-frida-script', html_url: 'https://github.com/zgff667/lasting-yang-frida-script', description: 'Frida常用脚本集合 - Hook/Trace/Bypass', language: 'JavaScript', stargazers_count: 0, forks_count: 0, fork: true },
+            { name: 'geekbyteR', html_url: 'https://github.com/zgff667/geekbyteR', description: '极客技术学习笔记与工具集', language: 'Python', stargazers_count: 0, forks_count: 0, fork: true },
+        ];
+
         const CACHE_KEY = 'gh_cache_' + USERNAME;
         const CACHE_DURATION = 30 * 60 * 1000;
 
@@ -564,8 +573,7 @@
 
         function renderRepos(repos) {
             if (!repos || repos.length === 0) {
-                document.getElementById('repos').innerHTML = '<div class="loading-text">暂无仓库数据</div>';
-                return;
+                repos = FALLBACK_REPOS;
             }
             const sorted = repos.sort((a, b) => b.stargazers_count - a.stargazers_count);
             document.getElementById('repos').innerHTML = sorted.map(repo => `
@@ -611,13 +619,13 @@
                         if (repos.length < 100) break;
                         page++;
                     }
-                    renderRepos(allRepos);
-                    setCache(user, allRepos);
+                    renderRepos(allRepos.length > 0 ? allRepos : FALLBACK_REPOS);
+                    setCache(user, allRepos.length > 0 ? allRepos : FALLBACK_REPOS);
                 } else {
-                    document.getElementById('repos').innerHTML = '<div class="loading-text">GitHub API 暂时不可用，请稍后刷新</div>';
+                    renderRepos(FALLBACK_REPOS);
                 }
             } catch (e) {
-                document.getElementById('repos').innerHTML = '<div class="loading-text">网络异常，请稍后重试</div>';
+                renderRepos(FALLBACK_REPOS);
             }
         }
 

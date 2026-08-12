@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>zgffzgff - GitHub</title>
+    <title>zgff667 - GitHub</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -101,14 +101,12 @@
             padding: 40px;
             font-size: 16px;
         }
-        .error {
+        .note {
             text-align: center;
-            color: #f85149;
-            padding: 20px;
-            font-size: 14px;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 8px;
+            font-style: italic;
         }
         @media (max-width: 600px) {
             .profile { flex-direction: column; align-items: center; text-align: center; }
@@ -118,9 +116,7 @@
 </head>
 <body>
     <div class="container">
-        <div class="profile" id="profile">
-            <div class="loading">Loading...</div>
-        </div>
+        <div class="profile" id="profile"></div>
         <h2 class="section-title" id="repo-title">Repositories</h2>
         <div class="repos" id="repos">
             <div class="loading">Loading repositories...</div>
@@ -128,7 +124,7 @@
     </div>
 
     <script>
-        const USERNAME = 'zgffzgff';
+        const USERNAME = 'zgff667';
         const LANG_COLORS = {
             'Python': '#3572A5', 'JavaScript': '#f1e05a', 'Java': '#b07219',
             'C': '#555555', 'C++': '#f34b7d', 'Go': '#00ADD8', 'Rust': '#dea584',
@@ -137,8 +133,18 @@
             'Ruby': '#701516', 'PHP': '#4F5D95', 'Dart': '#00B4AB',
         };
 
+        const FALLBACK_PROFILE = {
+            login: 'zgff667',
+            name: '学无止境',
+            avatar_url: 'https://github.com/zgff667.png',
+            bio: '很高兴和大家相识，让我们一起努力学习提升自己，能量大的时候去改变世界',
+            public_repos: 20,
+            followers: 2,
+            following: 18
+        };
+
         const CACHE_KEY = 'gh_cache_' + USERNAME;
-        const CACHE_DURATION = 10 * 60 * 1000;
+        const CACHE_DURATION = 30 * 60 * 1000;
 
         function getCache() {
             try {
@@ -175,8 +181,8 @@
 
         function renderRepos(repos) {
             document.getElementById('repo-title').textContent = `Repositories (${repos.length})`;
-            if (repos.length === 0) {
-                document.getElementById('repos').innerHTML = '<div class="loading">No public repositories yet.</div>';
+            if (!repos || repos.length === 0) {
+                document.getElementById('repos').innerHTML = '<div class="note">Repos will appear when GitHub API is available.</div>';
                 return;
             }
             document.getElementById('repos').innerHTML = repos.map(repo => `
@@ -194,11 +200,6 @@
             `).join('');
         }
 
-        function renderError(msg) {
-            document.getElementById('profile').innerHTML = `<div class="error">${msg}</div>`;
-            document.getElementById('repos').innerHTML = '';
-        }
-
         async function load() {
             const cache = getCache();
             if (cache) {
@@ -207,34 +208,32 @@
                 return;
             }
 
+            renderProfile(FALLBACK_PROFILE);
+
             try {
                 const profileRes = await fetch(`https://api.github.com/users/${USERNAME}`);
-                if (profileRes.status === 403) {
-                    renderError('GitHub API rate limit exceeded. Please try again later (resets every hour).');
-                    return;
-                }
-                const user = await profileRes.json();
-                if (!user.login) {
-                    renderError('Failed to load profile data.');
-                    return;
-                }
-                renderProfile(user);
+                if (profileRes.ok) {
+                    const user = await profileRes.json();
+                    if (user.login) renderProfile(user);
 
-                let allRepos = [];
-                let page = 1;
-                while (true) {
-                    const res = await fetch(`https://api.github.com/users/${USERNAME}/repos?per_page=100&page=${page}&sort=updated`);
-                    if (res.status === 403) break;
-                    const repos = await res.json();
-                    if (!Array.isArray(repos) || !repos.length) break;
-                    allRepos = allRepos.concat(repos);
-                    if (repos.length < 100) break;
-                    page++;
+                    let allRepos = [];
+                    let page = 1;
+                    while (true) {
+                        const res = await fetch(`https://api.github.com/users/${USERNAME}/repos?per_page=100&page=${page}&sort=updated`);
+                        if (!res.ok) break;
+                        const repos = await res.json();
+                        if (!Array.isArray(repos) || !repos.length) break;
+                        allRepos = allRepos.concat(repos);
+                        if (repos.length < 100) break;
+                        page++;
+                    }
+                    renderRepos(allRepos);
+                    setCache(user, allRepos);
+                } else {
+                    document.getElementById('repos').innerHTML = '<div class="note">Data updates when GitHub API is available.</div>';
                 }
-                renderRepos(allRepos);
-                setCache(user, allRepos);
             } catch (e) {
-                renderError('Network error. Please check your connection and try again.');
+                document.getElementById('repos').innerHTML = '<div class="note">Network error, showing cached info.</div>';
             }
         }
 

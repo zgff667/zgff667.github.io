@@ -101,13 +101,14 @@
             padding: 40px;
             font-size: 16px;
         }
-        .detail-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: #8b949e;
+        .error {
+            text-align: center;
+            color: #f85149;
+            padding: 20px;
             font-size: 14px;
-            margin-bottom: 6px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
         }
         @media (max-width: 600px) {
             .profile { flex-direction: column; align-items: center; text-align: center; }
@@ -136,63 +137,108 @@
             'Ruby': '#701516', 'PHP': '#4F5D95', 'Dart': '#00B4AB',
         };
 
-        async function loadProfile() {
+        const CACHE_KEY = 'gh_cache_' + USERNAME;
+        const CACHE_DURATION = 10 * 60 * 1000;
+
+        function getCache() {
             try {
-                const res = await fetch(`https://api.github.com/users/${USERNAME}`);
-                const user = await res.json();
-                document.getElementById('profile').innerHTML = `
-                    <img class="avatar" src="${user.avatar_url}" alt="avatar">
-                    <div class="info">
-                        <h1>${user.name || USERNAME}</h1>
-                        <div class="username">@${user.login}</div>
-                        ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
-                        ${user.location ? `<div class="detail-item">&#128205; ${user.location}</div>` : ''}
-                        ${user.blog ? `<div class="detail-item">&#128279; <a href="${user.blog.startsWith('http') ? user.blog : 'https://' + user.blog}" style="color:#58a6ff;text-decoration:none;">${user.blog}</a></div>` : ''}
-                        <div class="stats">
-                            <div class="stat"><div class="num">${user.public_repos}</div><div class="label">Repositories</div></div>
-                            <div class="stat"><div class="num">${user.followers}</div><div class="label">Followers</div></div>
-                            <div class="stat"><div class="num">${user.following}</div><div class="label">Following</div></div>
-                        </div>
-                    </div>
-                `;
-            } catch (e) {
-                document.getElementById('profile').innerHTML = '<div class="loading">Failed to load profile</div>';
-            }
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    if (Date.now() - data.timestamp < CACHE_DURATION) return data;
+                }
+            } catch (e) {}
+            return null;
         }
 
-        async function loadRepos() {
+        function setCache(profile, repos) {
             try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify({ profile, repos, timestamp: Date.now() }));
+            } catch (e) {}
+        }
+
+        function renderProfile(user) {
+            document.getElementById('profile').innerHTML = `
+                <img class="avatar" src="${user.avatar_url}" alt="avatar">
+                <div class="info">
+                    <h1>${user.name || USERNAME}</h1>
+                    <div class="username">@${user.login}</div>
+                    ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
+                    <div class="stats">
+                        <div class="stat"><div class="num">${user.public_repos}</div><div class="label">Repositories</div></div>
+                        <div class="stat"><div class="num">${user.followers}</div><div class="label">Followers</div></div>
+                        <div class="stat"><div class="num">${user.following}</div><div class="label">Following</div></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRepos(repos) {
+            document.getElementById('repo-title').textContent = `Repositories (${repos.length})`;
+            if (repos.length === 0) {
+                document.getElementById('repos').innerHTML = '<div class="loading">No public repositories yet.</div>';
+                return;
+            }
+            document.getElementById('repos').innerHTML = repos.map(repo => `
+                <div class="repo">
+                    <a href="${repo.html_url}" target="_blank">${repo.name}</a>
+                    ${repo.fork ? '<span style="font-size:12px;color:#8b949e;"> (fork)</span>' : ''}
+                    <div class="desc">${repo.description || 'No description'}</div>
+                    <div class="meta">
+                        ${repo.language ? `<span><span class="lang-dot" style="background:${LANG_COLORS[repo.language] || '#8b949e'}"></span>${repo.language}</span>` : ''}
+                        <span>&#11088; ${repo.stargazers_count}</span>
+                        <span>&#128274; ${repo.forks_count}</span>
+                        <span>Updated: ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderError(msg) {
+            document.getElementById('profile').innerHTML = `<div class="error">${msg}</div>`;
+            document.getElementById('repos').innerHTML = '';
+        }
+
+        async function load() {
+            const cache = getCache();
+            if (cache) {
+                renderProfile(cache.profile);
+                renderRepos(cache.repos);
+                return;
+            }
+
+            try {
+                const profileRes = await fetch(`https://api.github.com/users/${USERNAME}`);
+                if (profileRes.status === 403) {
+                    renderError('GitHub API rate limit exceeded. Please try again later (resets every hour).');
+                    return;
+                }
+                const user = await profileRes.json();
+                if (!user.login) {
+                    renderError('Failed to load profile data.');
+                    return;
+                }
+                renderProfile(user);
+
                 let allRepos = [];
                 let page = 1;
                 while (true) {
                     const res = await fetch(`https://api.github.com/users/${USERNAME}/repos?per_page=100&page=${page}&sort=updated`);
+                    if (res.status === 403) break;
                     const repos = await res.json();
-                    if (!repos.length) break;
+                    if (!Array.isArray(repos) || !repos.length) break;
                     allRepos = allRepos.concat(repos);
                     if (repos.length < 100) break;
                     page++;
                 }
-                document.getElementById('repo-title').textContent = `Repositories (${allRepos.length})`;
-                document.getElementById('repos').innerHTML = allRepos.map(repo => `
-                    <div class="repo">
-                        <a href="${repo.html_url}" target="_blank">${repo.name}</a>
-                        ${repo.fork ? '<span style="font-size:12px;color:#8b949e;"> (fork)</span>' : ''}
-                        <div class="desc">${repo.description || 'No description'}</div>
-                        <div class="meta">
-                            ${repo.language ? `<span><span class="lang-dot" style="background:${LANG_COLORS[repo.language] || '#8b949e'}"></span>${repo.language}</span>` : ''}
-                            <span>&#11088; ${repo.stargazers_count}</span>
-                            <span>&#128274; ${repo.forks_count}</span>
-                            <span>Updated: ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>
-                        </div>
-                    </div>
-                `).join('');
+                renderRepos(allRepos);
+                setCache(user, allRepos);
             } catch (e) {
-                document.getElementById('repos').innerHTML = '<div class="loading">Failed to load repositories</div>';
+                renderError('Network error. Please check your connection and try again.');
             }
         }
 
-        loadProfile();
-        loadRepos();
+        load();
     </script>
 </body>
 </html>
